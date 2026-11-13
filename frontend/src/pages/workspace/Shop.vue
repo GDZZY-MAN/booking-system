@@ -75,6 +75,7 @@ void loadSetup()
     </section>
     <section v-if="shop" class="panel">
       <h2>开通预约</h2>
+      <p><RouterLink to="/owner?tab=branding">设置预约站外观并预览 ↗</RouterLink></p>
       <p v-if="setupError" class="notice error" role="alert">{{ setupError }} <button class="text-button" @click="loadSetup">重试</button></p>
       <ol v-else-if="setup" class="setup-list">
         <li><span :class="{ done: setup.hasActiveService }">{{ setup.hasActiveService ? '✓' : '1' }}</span><RouterLink to="/owner?tab=services">配置一项上架服务</RouterLink></li>

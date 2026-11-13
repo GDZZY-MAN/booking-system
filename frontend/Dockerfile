@@ -9,3 +9,4 @@ FROM nginx:alpine
 COPY --from=build /app/dist/ /usr/share/nginx/html/
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY nginx/proxy.conf /etc/nginx/booking-proxy.conf
+COPY nginx/api.conf /etc/nginx/booking-api.conf

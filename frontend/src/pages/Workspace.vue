@@ -9,12 +9,14 @@ const route = useRoute()
 const router = useRouter()
 const sections = [
   { id: 'shop', label: '店铺与发布', symbol: '⌂' },
+  { id: 'branding', label: '我的预约站', symbol: '◈' },
   { id: 'services', label: '服务项目', symbol: '✦' },
   { id: 'team', label: '员工与排班', symbol: '◷' },
   { id: 'orders', label: '预约订单', symbol: '▤' },
 ]
 const pages = {
   shop: defineAsyncComponent(() => import('./workspace/Shop.vue')),
+  branding: defineAsyncComponent(() => import('./workspace/Branding.vue')),
   services: defineAsyncComponent(() => import('./workspace/Services.vue')),
   team: defineAsyncComponent(() => import('./workspace/Team.vue')),
   orders: defineAsyncComponent(() => import('./workspace/Orders.vue')),
@@ -58,8 +60,10 @@ watch(() => props.role, load, { immediate: true })
   <header class="site-header">
     <div class="site-header-inner">
       <Brand />
-      <div v-if="viewer" class="workspace-account"><span>{{ viewer.username }}</span>
-        <button class="button button-ghost" :disabled="loggingOut" @click="logout">退出登录</button>
+      <div class="workspace-account">
+        <RouterLink class="button button-ghost" to="/">返回首页</RouterLink>
+        <span v-if="viewer">{{ viewer.username }}</span>
+        <button v-if="viewer" class="button button-ghost" :disabled="loggingOut" @click="logout">退出登录</button>
       </div>
     </div>
   </header>

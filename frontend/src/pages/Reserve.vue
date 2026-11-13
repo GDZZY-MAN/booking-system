@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ApiError, api, dayOf, message, timeRange, today, type PublicShop, type Receipt, type Slot } from '../api'
-import SiteHeader from '../components/SiteHeader.vue'
+import { defaultBrand, type ShopBrand } from '../branding'
+import BookingNote from '../components/BookingNote.vue'
+import StoreIdentity from '../components/StoreIdentity.vue'
 
 const props = defineProps<{ slug: string }>()
 const path = '/public/' + encodeURIComponent(props.slug)
 const shop = ref<PublicShop>()
+const brand = ref<ShopBrand>(defaultBrand)
 const staff = ref<{ id: number; name: string }[]>([])
 const slots = ref<Slot[]>([])
 const serviceId = ref(0)
@@ -31,7 +34,12 @@ let lastRequest: { input: string; key: string } | undefined
 async function loadShop() {
   loadingPage.value = true
   pageError.value = ''
-  try { shop.value = await api<PublicShop>(path) }
+  try {
+    shop.value = await api<PublicShop>(path)
+    void api<ShopBrand>(path + '/branding')
+      .then(value => { brand.value = value })
+      .catch(() => { brand.value = defaultBrand })
+  }
   catch (issue) { shop.value = undefined; pageError.value = message(issue) }
   finally { loadingPage.value = false }
 }
@@ -118,14 +126,9 @@ void loadShop()
 </script>
 
 <template>
-  <SiteHeader booking />
-  <main id="main" class="reserve-layout content-width">
-    <aside v-if="shop" class="reserve-aside">
-      <span class="reserve-symbol" aria-hidden="true">✳</span>
-      <p class="section-label">在线预约</p>
-      <h1>{{ shop.name }}</h1>
-      <p v-if="shop.description" class="preserve-lines">{{ shop.description }}</p>
-      <span class="timezone">◷ 所有时间均为北京时间</span>
+  <main id="main" class="reserve-layout content-width store-theme" :data-theme="brand.theme">
+    <aside v-if="shop">
+      <StoreIdentity :name="shop.name" :description="shop.description" :brand="brand" />
     </aside>
     <section v-if="loadingPage || pageError" class="panel reserve-panel">
       <p v-if="loadingPage" role="status">正在加载店铺…</p>
@@ -141,10 +144,11 @@ void loadShop()
         <div><dt>预约时间</dt><dd>{{ dayOf(receipt.startsAt) }} · {{ timeRange(receipt) }}</dd></div>
         <div><dt>预约编号</dt><dd class="order-id">{{ receipt.id }}</dd></div>
       </dl>
-      <button class="button button-outline" @click="bookAgain">再约一次</button>
+      <button class="button button-outline" @click="bookAgain">返回店铺</button>
     </section>
     <section v-else-if="shop" class="panel reserve-panel">
       <h2>选择预约时间</h2>
+      <BookingNote :note="brand.bookingNote" />
       <p v-if="!shop.services.length" class="notice">店铺暂时没有上架服务，可以稍后回来看看。</p>
       <form v-else class="form-stack" @submit.prevent="submit">
         <fieldset class="form-stack reserve-fields" :disabled="submitting">
@@ -190,4 +194,5 @@ void loadShop()
       </form>
     </section>
   </main>
+  <footer class="store-credit">由 <RouterLink to="/">有约</RouterLink> 提供预约服务</footer>
 </template>

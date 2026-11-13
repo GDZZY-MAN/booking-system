@@ -19,6 +19,7 @@
 | PUT | `/shop` | 写入 `{ name, description }`，返回店铺 |
 | GET | `/shop/setup` | `{ hasActiveService, hasBookableEmployee }` |
 | PUT | `/shop/publication` | 写入 `{ published }`，返回店铺 |
+| GET / PUT | `/shop/branding` | 读取草稿 / 写入 `{ brand, publish }`。`publish: true` 同时更新公开版本 |
 | GET / POST | `/services` | 服务列表 / 新增 `{ name, durationMinutes, active }` |
 | PUT | `/services/{id}` | 更新服务，返回含 `id` 的记录 |
 | GET / POST | `/employees` | 员工列表 / 新增 `{ name, active, serviceIds, shifts, closedDates }` |
@@ -40,8 +41,11 @@
 | 方法 | 路径 | 请求与返回 |
 | --- | --- | --- |
 | GET | 根路径 | `{ name, description, services }` |
+| GET | `/branding` | 已发布店铺的品牌信息。默认使用松林主题 |
 | GET | `/employees?serviceId=…` | 当前服务可选员工 `[{ id, name }]` |
 | GET | `/slots?serviceId=…&employeeId=…&date=…` | 可约时段 `[{ startsAt, endsAt }]` |
 | POST | `/bookings` | 接受 `{ serviceId, employeeId, startsAt, customerName, contact, requestKey }`，返回预约凭证 `{ id, serviceName, employeeName, startsAt, endsAt, status }` |
 
 `requestKey` 是客户端生成的 UUID。同一店铺里用相同请求键和相同内容重试会得到原订单，改变内容须生成新的请求键。冲突时用 `SLOT_UNAVAILABLE` 提示重新查找时段。
+
+品牌信息为 `{ theme, address, businessNote, bookingNote, logo, cover }`。主题支持 `forest`、`plum`、`ocean`、`clay`。图片使用 JPG 或 PNG 的 Base64 Data URL，空字符串表示移除。店标上限 200 KiB，封面上限 400 KiB，长宽均不超过 2400 像素。公开品牌接口与预约接口独立。

@@ -36,7 +36,7 @@ async function submit() {
 </script>
 
 <template>
-  <SiteHeader />
+  <SiteHeader show-home />
   <main id="main" class="auth-layout content-width">
     <aside class="auth-aside">
       <span class="auth-symbol" aria-hidden="true">✳</span>
