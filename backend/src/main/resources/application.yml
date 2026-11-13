@@ -1,0 +1,38 @@
+spring:
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/shopbooking}
+    username: ${DB_USER:shopbooking}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 8
+      connection-timeout: 3000
+  mvc:
+    log-request-details: false
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+server:
+  address: ${BIND_ADDRESS:127.0.0.1}
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  shutdown: graceful
+  servlet:
+    session:
+      timeout: 2h
+      tracking-modes: cookie
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${COOKIE_SECURE:false}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"

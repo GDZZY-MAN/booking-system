@@ -1,0 +1,15 @@
+services:
+  backend:
+    environment:
+      COOKIE_SECURE: "true"
+  web:
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST to the certificate IP or DNS name}
+      NGINX_ENVSUBST_FILTER: '^PUBLIC_HOST$'
+    ports: !override
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend/nginx/https.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${ACME_WEBROOT:-/var/www/youyue-acme}:/var/www/acme:ro
+      - ${TLS_CERT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
