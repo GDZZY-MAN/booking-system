@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api, dayOf, message, timeRange, today, type Order, type Viewer } from '../../api'
 
 const props = defineProps<{ role: Viewer['role'] }>()
 const rows = ref<Order[]>()
 const from = ref(today())
-const through = ref(today(29))
+const through = ref(today(6))
+const selectedDay = ref('')
+const days = computed(() => {
+  if (!from.value || !through.value) return []
+  const count = Math.min(31, 1 + Math.round((Date.parse(through.value) - Date.parse(from.value)) / 86400000))
+  return Array.from({ length: count }, (_, index) => new Date(Date.parse(from.value) + index * 86400000).toISOString().slice(0, 10))
+})
+const visible = computed(() => (rows.value ?? []).filter(row => !selectedDay.value || dayOf(row.startsAt) === selectedDay.value))
 const loading = ref(false)
 const error = ref('')
 const actionError = ref('')
@@ -20,6 +27,7 @@ async function load() {
   try {
     const params = new URLSearchParams({ from: from.value, through: through.value })
     rows.value = await api<Order[]>(url + '?' + params)
+    selectedDay.value = ''
   } catch (issue) { error.value = message(issue) }
   finally { loading.value = false }
 }
@@ -42,7 +50,7 @@ void load()
 
 <template>
   <section class="panel">
-    <h2>{{ role === 'OWNER' ? '预约订单' : '我的预约' }}</h2>
+    <h2>{{ role === 'OWNER' ? '预约日历' : '我的预约' }}</h2>
     <form class="order-filters" @submit.prevent="load">
       <label>开始日期<input v-model="from" type="date" required /></label>
       <label>结束日期<input v-model="through" type="date" :min="from" required /></label>
@@ -52,8 +60,13 @@ void load()
     <p v-if="error" class="notice error" role="alert">{{ error }} <button class="text-button" @click="load">重试</button></p>
     <p v-if="notice" class="notice success" role="status">{{ notice }}</p>
     <p v-if="!loading && !error && rows && !rows.length" class="muted">这个日期范围内还没有预约。</p>
-    <ul v-if="rows?.length" class="data-list order-list">
-      <li v-for="row in rows" :key="row.id">
+    <nav v-if="rows && !loading" class="calendar-strip" aria-label="筛选预约日期">
+      <button class="button button-small" :aria-pressed="!selectedDay" @click="selectedDay = ''">全部</button>
+      <button v-for="day in days" :key="day" class="button button-small" :aria-pressed="day === selectedDay" @click="selectedDay = day">{{ day.slice(5) }}<small>{{ rows.filter(r => dayOf(r.startsAt) === day && r.status === 'CONFIRMED').length }} 笔</small></button>
+    </nav>
+    <p v-if="selectedDay && !visible.length" class="muted">{{ selectedDay }} 没有预约。</p>
+    <ul v-if="visible.length" class="data-list order-list">
+      <li v-for="row in visible" :key="row.id">
         <div class="order-summary"><strong>{{ row.serviceName }}</strong>
           <small>{{ dayOf(row.startsAt) }} · {{ timeRange(row) }} · {{ row.employeeName }}</small>
           <small>顾客 {{ row.customerName }} · {{ row.contact }}</small>

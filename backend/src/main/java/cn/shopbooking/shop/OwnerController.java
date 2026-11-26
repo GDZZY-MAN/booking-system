@@ -22,12 +22,21 @@ public class OwnerController {
     private final ScheduleService schedules;
     private final Accounts accounts;
     private final Bookings bookings;
+    private final PlatformOperations platform;
 
-    public OwnerController(ShopService shops, ScheduleService schedules, Accounts accounts, Bookings bookings) {
+    public OwnerController(ShopService shops, ScheduleService schedules, Accounts accounts, Bookings bookings, PlatformOperations platform) {
         this.shops = shops;
         this.schedules = schedules;
         this.accounts = accounts;
         this.bookings = bookings;
+        this.platform = platform;
+    }
+
+    public record Overview(ShopService.Shop shop, Setup setup, List<Bookings.Order> today) {}
+    @GetMapping("/overview")
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public Overview overview(@AuthenticationPrincipal Viewer viewer) {
+        return new Overview(shop(viewer), setup(viewer), bookings.today(viewer.shopId()));
     }
 
     @GetMapping("/shop")
@@ -51,13 +60,7 @@ public class OwnerController {
         if (input.published() == null) {
             throw ApiException.invalid("请选择是否发布。");
         }
-        long shopId = viewer.shopId();
-        shops.lockConfiguration(shopId);
-        if (input.published() && !schedules.readyToPublish(shopId)) {
-            throw ApiException.conflict("SETUP_INCOMPLETE", "发布前请配置上架服务，并安排能提供该服务的员工。");
-        }
-        shops.setPublished(shopId, input.published());
-        return shops.get(shopId);
+        return platform.submit(viewer.shopId(), input.published());
     }
 
     @GetMapping("/services")

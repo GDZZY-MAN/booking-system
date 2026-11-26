@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { api, dayOf, message, timeOf, type Employee, type Offering } from '../../api'
+import MultiDatePicker from '../../components/MultiDatePicker.vue'
 
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-const minuteOptions = Array.from({ length: 97 }, (_, index) => index * 15)
 const rows = ref<Employee[]>()
 const services = ref<Offering[]>()
 const edit = ref<Employee>()
-const dayToClose = ref('')
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
@@ -20,7 +19,14 @@ const inviteExpires = ref('')
 const inviteError = ref('')
 
 const minuteLabel = (minute: number) =>
-  String(Math.floor(minute / 60)).padStart(2, '0') + ':' + String(minute % 60).padStart(2, '0')
+  String(Math.floor(minute / 60) % 24).padStart(2, '0') + ':' + String(minute % 60).padStart(2, '0')
+function readTime(event: Event, end = false) {
+  const value = (event.target as HTMLInputElement).value
+  if (!value) return NaN
+  const [hour, minute] = value.split(':').map(Number)
+  const total = hour! * 60 + minute!
+  return end && total === 0 ? 1440 : total
+}
 
 async function load() {
   loading.value = true
@@ -41,16 +47,8 @@ function open(row?: Employee) {
     id: 0, name: '', active: true, serviceIds: [], closedDates: [],
     shifts: [1, 2, 3, 4, 5].map(weekday => ({ weekday, startMinute: 540, endMinute: 1080 })),
   }
-  dayToClose.value = ''
   formError.value = ''
   notice.value = ''
-}
-
-function closeDate() {
-  if (!edit.value || !dayToClose.value || edit.value.closedDates.includes(dayToClose.value)) return
-  edit.value.closedDates.push(dayToClose.value)
-  edit.value.closedDates.sort()
-  dayToClose.value = ''
 }
 
 async function save() {
@@ -129,16 +127,15 @@ void loadServices()
         </fieldset>
         <fieldset class="schedule-group">
           <legend>每周排班（北京时间）</legend>
+          <p class="muted">开始与结束时间可精确到分钟；结束时间 00:00 表示当天 24:00。</p>
           <div v-for="(shift, index) in edit.shifts" :key="index" class="shift-row">
             <select v-model="shift.weekday" :aria-label="'第 ' + (index + 1) + ' 段的星期'">
               <option v-for="(weekday, day) in weekdays" :key="day" :value="day + 1">{{ weekday }}</option>
             </select>
-            <select v-model="shift.startMinute" :aria-label="'第 ' + (index + 1) + ' 段的开始时间'">
-              <option v-for="minute in minuteOptions.slice(0, -1)" :key="minute" :value="minute">{{ minuteLabel(minute) }}</option>
-            </select>
-            <select v-model="shift.endMinute" :aria-label="'第 ' + (index + 1) + ' 段的结束时间'">
-              <option v-for="minute in minuteOptions.slice(1)" :key="minute" :value="minute">{{ minuteLabel(minute) }}</option>
-            </select>
+            <input type="time" step="60" required :value="Number.isFinite(shift.startMinute) ? minuteLabel(shift.startMinute) : ''"
+              :aria-label="'第 ' + (index + 1) + ' 段的开始时间'" @input="shift.startMinute = readTime($event)" />
+            <input type="time" step="60" required :value="Number.isFinite(shift.endMinute) ? minuteLabel(shift.endMinute) : ''"
+              :aria-label="'第 ' + (index + 1) + ' 段的结束时间'" @input="shift.endMinute = readTime($event, true)" />
             <button type="button" class="text-button" :aria-label="'移除第 ' + (index + 1) + ' 段排班'" @click="edit.shifts.splice(index, 1)">移除</button>
           </div>
           <button type="button" class="button button-outline" :disabled="edit.shifts.length >= 56"
@@ -146,15 +143,7 @@ void loadServices()
         </fieldset>
         <fieldset class="schedule-group">
           <legend>指定日期停约</legend>
-          <p class="muted">停约只影响新订单，已经确认的预约会保留。</p>
-          <div class="actions"><input v-model="dayToClose" type="date" aria-label="停约日期" />
-            <button type="button" class="button button-outline" :disabled="!dayToClose || edit.closedDates.includes(dayToClose)" @click="closeDate">加入停约日期</button>
-          </div>
-          <ul v-if="edit.closedDates.length" class="date-tags">
-            <li v-for="(date, index) in edit.closedDates" :key="date">{{ date }}
-              <button type="button" class="text-button" :aria-label="'移除 ' + date" @click="edit.closedDates.splice(index, 1)">×</button>
-            </li>
-          </ul>
+          <MultiDatePicker v-model="edit.closedDates" />
         </fieldset>
         <p v-if="formError" class="notice error" role="alert">{{ formError }}</p>
         <div class="actions"><button class="button button-dark" :disabled="saving || !services">保存员工与排班</button>

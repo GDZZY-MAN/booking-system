@@ -83,7 +83,7 @@ void load()
 <template>
   <section class="panel">
     <div class="panel-heading">
-      <h2>我的预约站</h2>
+      <h2>店铺展示</h2>
       <a v-if="shop?.published" :href="link" class="button button-outline" target="_blank" rel="noopener">查看已发布预约页 ↗</a>
     </div>
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
@@ -118,7 +118,7 @@ void load()
           <button type="button" class="button button-dark" :disabled="pending || reading > 0" @click="save(true)">发布外观</button>
           <button type="button" class="button button-ghost preview-jump" @click="preview?.focus()">查看手机预览</button>
         </div>
-        <RouterLink v-if="!shop.published" to="/owner?tab=shop">前往开通预约页 ↗</RouterLink>
+        <RouterLink v-if="!shop.published" to="/owner?tab=shop">前往提交入驻审核</RouterLink>
       </form>
       <section ref="preview" tabindex="-1" class="brand-preview" aria-labelledby="brand-preview-title">
         <h3 id="brand-preview-title">手机预览</h3>

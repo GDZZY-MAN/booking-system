@@ -2,6 +2,9 @@ package cn.shopbooking.booking;
 
 import cn.shopbooking.schedule.ScheduleService;
 import cn.shopbooking.shop.ShopService;
+import cn.shopbooking.shop.Campus;
+import cn.shopbooking.account.Accounts.Viewer;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,23 +18,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/public/{slug}")
 public class PublicController {
-    public record Store(String name, String description, List<ShopService.Offering> services) {}
+    public record Store(String name, String description, List<ShopService.Offering> services, Campus.Profile discovery) {}
     public record EmployeeOption(long id, String name) {}
     private final ShopService shops;
     private final ScheduleService schedules;
     private final Bookings bookings;
+    private final Campus campus;
 
-    public PublicController(ShopService shops, ScheduleService schedules, Bookings bookings) {
+    public PublicController(ShopService shops, ScheduleService schedules, Bookings bookings, Campus campus) {
         this.shops = shops;
         this.schedules = schedules;
         this.bookings = bookings;
+        this.campus = campus;
     }
 
     @GetMapping
     public Store store(@PathVariable String slug) {
         var shop = shops.published(slug);
         return new Store(shop.name(), shop.description(),
-                shops.offerings(shop.id()).stream().filter(ShopService.Offering::active).toList());
+                shops.offerings(shop.id()).stream().filter(ShopService.Offering::active).toList(), campus.profile(shop.id()));
     }
 
     @GetMapping("/employees")
@@ -49,7 +54,11 @@ public class PublicController {
     }
 
     @PostMapping("/bookings")
-    public Bookings.Receipt create(@PathVariable String slug, @RequestBody Bookings.Create input) {
-        return bookings.create(slug, input);
+    public Bookings.Receipt create(@PathVariable String slug, @RequestBody Bookings.Create input,
+                                   @AuthenticationPrincipal Viewer viewer) {
+        return bookings.create(slug, input, viewer.readerId());
     }
+
+    @GetMapping("/reviews")
+    public List<Bookings.PublicReview> reviews(@PathVariable String slug) { return bookings.reviews(slug); }
 }

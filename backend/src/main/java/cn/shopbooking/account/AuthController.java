@@ -22,10 +22,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     public record Token(String token, String headerName) {}
     private final Accounts accounts;
+    private final Readers readers;
+    private final PlatformAdmins admins;
     private final HttpSessionSecurityContextRepository repository;
 
-    public AuthController(Accounts accounts, HttpSessionSecurityContextRepository repository) {
+    public AuthController(Accounts accounts, Readers readers, PlatformAdmins admins, HttpSessionSecurityContextRepository repository) {
         this.accounts = accounts;
+        this.readers = readers;
+        this.admins = admins;
         this.repository = repository;
     }
 
@@ -50,6 +54,23 @@ public class AuthController {
     @PostMapping("/accept")
     public Viewer accept(@RequestBody Accounts.Accept input, HttpServletRequest request, HttpServletResponse response) {
         return signIn(accounts.accept(input), request, response);
+    }
+
+    @PostMapping("/reader/register")
+    public Viewer readerRegister(@RequestBody Accounts.Credentials input, HttpServletRequest request,
+                                 HttpServletResponse response) {
+        return signIn(readers.register(input), request, response);
+    }
+
+    @PostMapping("/reader/login")
+    public Viewer readerLogin(@RequestBody Accounts.Credentials input, HttpServletRequest request,
+                              HttpServletResponse response) {
+        return signIn(readers.login(input), request, response);
+    }
+
+    @PostMapping("/admin/login")
+    public Viewer adminLogin(@RequestBody Accounts.Credentials input, HttpServletRequest request, HttpServletResponse response) {
+        return signIn(admins.login(input), request, response);
     }
 
     private Viewer signIn(Viewer viewer, HttpServletRequest request, HttpServletResponse response) {

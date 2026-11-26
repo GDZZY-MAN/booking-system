@@ -9,10 +9,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ShopService {
-    public record Shop(long id, String slug, String name, String description, boolean published) {}
-    public record Offering(long id, String name, int durationMinutes, boolean active) {}
+    public record Shop(long id, String slug, String name, String description, boolean published, String resourceKind, String merchantState, String reviewNote) {}
+    public record Offering(long id, String name, int durationMinutes, boolean active, String priceMode, Integer priceCents) {}
     public record Details(String name, String description) {}
-    public record OfferingInput(String name, int durationMinutes, Boolean active) {}
+    public record OfferingInput(String name, int durationMinutes, Boolean active, String priceMode, Integer priceCents) {
+        public OfferingInput(String name, int durationMinutes, Boolean active) {
+            this(name, durationMinutes, active, "INQUIRE", null);
+        }
+    }
 
     private final JdbcClient db;
 
@@ -35,8 +39,17 @@ public class ShopService {
     }
 
     public Shop published(String slug) {
-        return db.sql("select * from shop where slug = ? and published").param(slug).query(Shop.class)
+        return db.sql("select * from shop where slug = ? and published and resource_kind = 'MERCHANT' and merchant_state = 'APPROVED'").param(slug).query(Shop.class)
                 .optional().orElseThrow(ShopService::notPublished);
+    }
+
+    public boolean isMerchant(long id) {
+        return db.sql("select exists(select 1 from shop where id = ? and resource_kind = 'MERCHANT')").param(id).query(Boolean.class).single();
+    }
+
+    public boolean isActiveMerchant(long id) {
+        return db.sql("select exists(select 1 from shop where id = ? and resource_kind = 'MERCHANT' and merchant_state <> 'DELETED')")
+                .param(id).query(Boolean.class).single();
     }
 
     // Configuration updates take an exclusive lock. Reservations share it while validating.
@@ -67,16 +80,16 @@ public class ShopService {
     }
 
     public void setPublished(long shopId, boolean value) {
-        db.sql("update shop set published = ? where id = ?").params(value, shopId).update();
+        db.sql("update shop set published = ?, merchant_state = case when ? then 'APPROVED' else merchant_state end where id = ?").params(value, value, shopId).update();
     }
 
     public List<Offering> offerings(long shopId) {
-        return db.sql("select id, name, duration_minutes, active from service where shop_id = ? order by id")
+        return db.sql("select * from service where shop_id = ? order by id")
                 .param(shopId).query(Offering.class).list();
     }
 
     public Offering activeOffering(long shopId, long id) {
-        return db.sql("select id, name, duration_minutes, active from service where shop_id = ? and id = ? and active")
+        return db.sql("select * from service where shop_id = ? and id = ? and active")
                 .params(shopId, id).query(Offering.class).optional()
                 .orElseThrow(() -> ApiException.missing("这项服务当前不可预约。"));
     }
@@ -85,20 +98,26 @@ public class ShopService {
     public Offering saveOffering(long shopId, Long id, OfferingInput input) {
         String name = Inputs.required(input.name(), 80, "服务名称");
         int duration = input.durationMinutes();
-        if (duration < 15 || duration > 480 || duration % 15 != 0 || input.active() == null) {
-            throw ApiException.invalid("服务时长须为 15 至 480 分钟，且是 15 的倍数。");
+        if (duration < 1 || duration > 480 || input.active() == null) {
+            throw ApiException.invalid("服务时长须为 1 至 480 分钟。");
         }
         lockConfiguration(shopId);
+        String mode = input.priceMode() == null ? "INQUIRE" : input.priceMode();
+        Integer cents = input.priceCents();
+        if (!List.of("FIXED", "FREE", "INQUIRE").contains(mode)
+                || ("FIXED".equals(mode) ? cents == null || cents <= 0 : cents != null)) {
+            throw ApiException.invalid("请选择价格方式，固定价格必须大于零。");
+        }
         if (id == null) {
             return db.sql("""
-                    insert into service(shop_id, name, duration_minutes, active) values (?, ?, ?, ?)
-                    returning id, name, duration_minutes, active
-                    """).params(shopId, name, duration, input.active()).query(Offering.class).single();
+                    insert into service(shop_id, name, duration_minutes, active, price_mode, price_cents)
+                    values (?, ?, ?, ?, ?, ?) returning *
+                    """).params(java.util.Arrays.asList(shopId, name, duration, input.active(), mode, cents)).query(Offering.class).single();
         }
         return db.sql("""
-                update service set name = ?, duration_minutes = ?, active = ? where shop_id = ? and id = ?
-                returning id, name, duration_minutes, active
-                """).params(name, duration, input.active(), shopId, id).query(Offering.class).optional()
+                update service set name = ?, duration_minutes = ?, active = ?, price_mode = ?, price_cents = ?
+                where shop_id = ? and id = ? returning *
+                """).params(java.util.Arrays.asList(name, duration, input.active(), mode, cents, shopId, id)).query(Offering.class).optional()
                 .orElseThrow(() -> ApiException.missing("服务不存在。"));
     }
 }

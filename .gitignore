@@ -8,3 +8,5 @@ backups/
 .local/
 *.log
 .idea/
+output/
+分享副本/

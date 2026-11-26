@@ -33,6 +33,9 @@ function client() {
   }
 }
 
+const admin = client()
+const adminIdentity = { username: process.env.PLATFORM_ADMIN_USERNAME, password: process.env.PLATFORM_ADMIN_PASSWORD }
+assert.ok(adminIdentity.username && adminIdentity.password, 'Set PLATFORM_ADMIN_USERNAME and PLATFORM_ADMIN_PASSWORD for the test instance.')
 const owner = client()
 const guest = client()
 const guest2 = client()
@@ -69,7 +72,9 @@ assert.deepEqual((await owner('/owner/shop/setup')).body, { hasActiveService: tr
 await otherOwner('/owner/employees', post(schedule, 400))
 await otherOwner('/owner/services/' + long.id, put({ ...long, name: '越权修改' }, 404))
 await otherOwner('/owner/employees/' + first.id + '/invite', post(undefined, 404))
-await owner('/owner/shop/publication', put({ published: true }))
+const submitted = (await owner('/owner/shop/publication', put({ published: true }))).body
+await admin('/auth/admin/login', post(adminIdentity))
+await admin('/admin/merchants/' + submitted.id + '/decision', post({ action: 'approve', note: '' }))
 const brandPath = '/owner/shop/branding'
 const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
 const brand = { theme: 'plum', address: '青禾路 8 号', businessNote: '周末营业', bookingNote: '请提前到店', logo, cover: logo }
@@ -107,6 +112,11 @@ const input = (service, person, minute) => ({
 })
 assert.equal((await guest(slots(long, first))).body[0].startsAt, start('09:00'))
 await guest(slots(long, first).replace(date, '2099-01-01'), { status: 400 })
+await guest(store + '/bookings', post(input(long, first, '09:00'), 401))
+await owner(store + '/bookings', post(input(long, first, '09:00'), 403))
+const campusLogin = { username: 'reader-' + run, password }
+await guest('/auth/reader/register', post(campusLogin))
+await guest2('/auth/reader/login', post(campusLogin))
 await Promise.all([guest('/auth/csrf'), guest2('/auth/csrf')])
 const collision = [input(long, first, '09:00'), input(short, first, '09:15')]
 const competing = await Promise.all(collision.map((value, index) => [guest, guest2][index](store + '/bookings', post(value, null))))

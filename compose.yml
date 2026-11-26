@@ -23,6 +23,8 @@ services:
       DB_USER: shopbooking
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      PLATFORM_ADMIN_USERNAME: ${PLATFORM_ADMIN_USERNAME:-}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy

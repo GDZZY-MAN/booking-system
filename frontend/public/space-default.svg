@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 320">
+  <defs>
+    <linearGradient id="wall" x2="1" y2=".4"><stop stop-color="#c4d8db"/><stop offset="1" stop-color="#e8dfcd"/></linearGradient>
+    <pattern id="books" width="56" height="66" patternUnits="userSpaceOnUse"><path fill="#536f78" d="M2 17h12v43H2z"/><path fill="#9ba99a" d="M16 9h10v51H16z"/><path fill="#b1795e" d="m30 20 10-3 10 40-10 3z"/><path fill="#596567" d="M0 60h56v6H0z"/></pattern>
+    <clipPath id="window"><path d="M55 215V108a75 75 0 0 1 150 0v107zm180 0V108a75 75 0 0 1 150 0v107z"/></clipPath>
+  </defs>
+  <path fill="url(#wall)" d="M0 0h1000v320H0z"/><g clip-path="url(#window)"><path fill="#eff4e9" d="M40 20h360v200H40z"/>
+  <circle cx="300" cy="84" r="29" fill="#e9ce93"/><path fill="#a3bab4" d="m0 220 113-94 44 38 78-53 52 55 91-45 50 99z"/>
+  <path stroke="#b8c4bd" stroke-width="5" d="M130 20v200m180-200v200M40 136h355"/></g>
+  <path fill="#8c9a92" d="M0 245h1000v75H0z"/><path fill="#647276" d="M679 48h263v200H679z"/><path fill="url(#books)" d="M691 53h239v183H691z"/>
+  <path fill="#455c63" d="M178 209h456v12H178zM205 220h10v79h-10zm393 0h10v79h-10z"/><path fill="#eadbbb" d="m350 204 26-6 31 6 28-5 20 7-49 4z"/>
+  <g fill="#4e6970"><rect x="250" y="228" width="53" height="39" rx="6"/><rect x="495" y="228" width="53" height="39" rx="6"/><path d="M254 263h5v45h-5zm40 0h5v45h-5zm205 0h5v45h-5zm40 0h5v45h-5z"/></g>
+</svg>

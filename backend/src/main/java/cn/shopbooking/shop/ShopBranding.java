@@ -66,7 +66,7 @@ public class ShopBranding {
         return cleaned;
     }
 
-    private static String image(String value, int maxKiB, String field) {
+    static String image(String value, int maxKiB, String field) {
         if (value == null || value.isEmpty()) {
             return "";
         }

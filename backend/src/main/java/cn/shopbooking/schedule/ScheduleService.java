@@ -73,8 +73,9 @@ public class ScheduleService {
         if (input.active() == null || input.serviceIds() == null || input.shifts() == null
                 || input.closedDates() == null || input.shifts().size() > 56
                 || input.closedDates().size() > 366 || input.serviceIds().size() > 1000
-                || input.shifts().contains(null) || input.closedDates().contains(null)
-                || input.serviceIds().contains(null)) {
+                || input.shifts().stream().anyMatch(java.util.Objects::isNull)
+                || input.closedDates().stream().anyMatch(java.util.Objects::isNull)
+                || input.serviceIds().stream().anyMatch(java.util.Objects::isNull)) {
             throw ApiException.invalid("请检查员工排班、服务或停约日期。");
         }
         List<Shift> shifts = input.shifts().stream()
@@ -128,11 +129,10 @@ public class ScheduleService {
         Shift previous = null;
         for (Shift shift : shifts) {
             if (shift.weekday() < 1 || shift.weekday() > 7 || shift.startMinute() < 0 || shift.endMinute() > 1440
-                    || shift.startMinute() >= shift.endMinute() || shift.startMinute() % 15 != 0
-                    || shift.endMinute() % 15 != 0
+                    || shift.startMinute() >= shift.endMinute()
                     || (previous != null && previous.weekday() == shift.weekday()
                     && previous.endMinute() > shift.startMinute())) {
-                throw ApiException.invalid("排班须在当天，按 15 分钟设置，且不能重叠。");
+                throw ApiException.invalid("排班须在当天，结束时间须晚于开始时间，且不能重叠。");
             }
             previous = shift;
         }

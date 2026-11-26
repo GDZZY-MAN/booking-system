@@ -26,6 +26,10 @@ public class Bookings {
                         String status) {}
     public record Receipt(UUID id, String serviceName, String employeeName, OffsetDateTime startsAt,
                           OffsetDateTime endsAt, String status) {}
+    public record MyBooking(UUID id, String slug, String venueName, String serviceName, String employeeName,
+                            OffsetDateTime startsAt, OffsetDateTime endsAt, String status, String address, Integer rating) {}
+    public record Review(int rating, String body) {}
+    public record PublicReview(int rating, String body, OffsetDateTime createdAt, String serviceName) {}
     private static final String ORDER_FIELDS = """
             id, service_id, employee_id, service_name, employee_name,
             starts_at, ends_at, customer_name, contact, status
@@ -72,7 +76,7 @@ public class Bookings {
     }
 
     @Transactional
-    public Receipt create(String slug, Create input) {
+    public Receipt create(String slug, Create input, long readerId) {
         String customer = Inputs.required(input.customerName(), 60, "称呼");
         String contact = Inputs.required(input.contact(), 80, "联系方式");
         if (input.requestKey() == null || input.startsAt() == null) {
@@ -87,6 +91,10 @@ public class Bookings {
                 .params(shop.id(), input.requestKey()).query(Order.class).optional();
         if (previous.isPresent()) {
             Order order = previous.get();
+            if (db.sql("select count(*) from booking where id = ? and reader_id = ?")
+                    .params(order.id(), readerId).query(Integer.class).single() != 1) {
+                throw ApiException.conflict("REQUEST_KEY_REUSED", "请重新提交预约。");
+            }
             if (order.serviceId() != input.serviceId() || order.employeeId() != input.employeeId()
                     || !order.startsAt().isEqual(input.startsAt()) || !order.customerName().equals(customer)
                     || !order.contact().equals(contact)) {
@@ -95,7 +103,7 @@ public class Bookings {
             return receipt(order);
         }
 
-        if (!shop.published()) {
+        if (!shop.published() || !"MERCHANT".equals(shop.resourceKind()) || !"APPROVED".equals(shop.merchantState())) {
             throw ShopService.notPublished();
         }
         var service = shops.activeOffering(shop.id(), input.serviceId());
@@ -106,18 +114,67 @@ public class Bookings {
         validateDay(day, now.toLocalDate());
         int minute = start.getHour() * 60 + start.getMinute();
         if (!start.isAfter(now) || start.getSecond() != 0 || start.getNano() != 0
-                || minute % STEP_MINUTES != 0 || schedules.shiftsFor(employee.id(), day).stream().noneMatch(
-                        shift -> minute >= shift.startMinute() && minute + service.durationMinutes() <= shift.endMinute())) {
+                || schedules.shiftsFor(employee.id(), day).stream().noneMatch(
+                        shift -> minute >= shift.startMinute() && (minute - shift.startMinute()) % STEP_MINUTES == 0
+                                && minute + service.durationMinutes() <= shift.endMinute())) {
             throw ApiException.conflict("SLOT_UNAVAILABLE", "这个时段已不可预约，请重新选择。");
         }
         Order order = db.sql("""
                 insert into booking(id, shop_id, employee_id, service_id, service_name, employee_name,
-                    starts_at, ends_at, customer_name, contact, status, request_key)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', ?) returning
+                    starts_at, ends_at, customer_name, contact, status, request_key, reader_id)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', ?, ?) returning
                 """ + ORDER_FIELDS).params(UUID.randomUUID(), shop.id(), employee.id(), service.id(),
                 service.name(), employee.name(), start, start.plusMinutes(service.durationMinutes()),
-                customer, contact, input.requestKey()).query(Order.class).single();
+                customer, contact, input.requestKey(), readerId).query(Order.class).single();
         return receipt(order);
+    }
+
+    public List<MyBooking> mine(long reader) {
+        return db.sql("""
+                select o.id, s.slug, s.name as venue_name, o.service_name, o.employee_name, o.starts_at, o.ends_at,
+                    o.status, coalesce(nullif(p.address, ''), b.address, '') as address, r.rating
+                from booking o join shop s on s.id = o.shop_id
+                left join campus_profile p on p.shop_id = s.id
+                left join shop_branding b on b.shop_id = s.id and b.published
+                left join service_review r on r.booking_id = o.id
+                where o.reader_id = ? order by o.starts_at, o.id
+                """).param(reader).query(MyBooking.class).list();
+    }
+
+    @Transactional
+    public void cancelByReader(long reader, UUID id) {
+        int changed = db.sql("""
+                update booking set status = 'CANCELLED' where id = ? and reader_id = ? and starts_at > ? and status = 'CONFIRMED'
+                """).params(id, reader, now()).update();
+        if (changed != 1) throw ApiException.conflict("CANNOT_CANCEL", "仅能取消自己尚未开始的服务预约，请刷新安排。");
+    }
+
+    @Transactional
+    public void review(long reader, UUID id, Review input) {
+        String body = Inputs.required(input.body(), 500, "评价内容");
+        if (input.rating() < 1 || input.rating() > 5) throw ApiException.invalid("请选择 1–5 星评分。");
+        var order = db.sql("select " + ORDER_FIELDS + " from booking where id = ? and reader_id = ? for update")
+                .params(id, reader).query(Order.class).optional().orElseThrow(() -> ApiException.missing("预约不存在。"));
+        if (!order.status().equals("CONFIRMED") || order.endsAt().isAfter(now())) {
+            throw ApiException.conflict("REVIEW_NOT_READY", "服务结束后才能评价，已取消的预约不能评价。");
+        }
+        if (db.sql("insert into service_review(booking_id, rating, body, created_at) values (?, ?, ?, ?) on conflict do nothing")
+                .params(id, input.rating(), body, now()).update() == 0) {
+            throw ApiException.conflict("ALREADY_REVIEWED", "这次服务已经评价过了。");
+        }
+    }
+
+    public List<PublicReview> reviews(String slug) {
+        long shop = shops.published(slug).id();
+        return db.sql("""
+                select r.rating, r.body, r.created_at, o.service_name from service_review r
+                join booking o on o.id = r.booking_id where o.shop_id = ? order by r.created_at desc limit 30
+                """).param(shop).query(PublicReview.class).list();
+    }
+
+    public List<Order> today(long shopId) {
+        LocalDate day = now().toLocalDate();
+        return list(shopId, null, day, day);
     }
 
     public List<Order> list(long shopId, Long employeeId, LocalDate from, LocalDate through) {

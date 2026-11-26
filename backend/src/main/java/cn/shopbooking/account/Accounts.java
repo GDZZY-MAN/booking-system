@@ -21,7 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class Accounts {
-    public record Viewer(long shopId, Long employeeId, String username, String role) {}
+    public record Viewer(long shopId, Long employeeId, String username, String role, Long readerId) {
+        public Viewer(long shopId, Long employeeId, String username, String role) {
+            this(shopId, employeeId, username, role, null);
+        }
+    }
     public record Register(String username, String password, String shopName, String slug) {}
     public record Credentials(String username, String password) {}
     public record Accept(String token, String username, String password) {}
@@ -67,6 +71,12 @@ public class Accounts {
         if (!encoder.matches(password, row.map(LoginRow::passwordHash).orElse(dummyHash)) || row.isEmpty()) {
             throw new ApiException(401, "INVALID_CREDENTIALS", "账号或密码有误。");
         }
+        if ("OWNER".equals(row.get().role()) && !shops.isMerchant(row.get().shopId())) {
+            throw new ApiException(403, "VENUE_MANAGEMENT_MOVED", "场馆管理已迁移到平台后台，请使用平台管理员账号登录。");
+        }
+        if (shops.isMerchant(row.get().shopId()) && !shops.isActiveMerchant(row.get().shopId())) {
+            throw new ApiException(403, "MERCHANT_REMOVED", "商家已被平台删除，请联系管理员。");
+        }
         return row.get().viewer();
     }
 
@@ -103,6 +113,7 @@ public class Accounts {
                 join employee e on e.id = i.employee_id where i.token_hash = ?
                 """).param(hash).query(InviteTarget.class).optional().orElseThrow(Accounts::inviteMissing);
         shops.lockConfiguration(target.shopId());
+        if (!shops.isActiveMerchant(target.shopId())) throw inviteMissing();
         int deleted = db.sql("delete from employee_invite where token_hash = ? and expires_at > ?")
                 .params(hash, OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)).update();
         if (deleted == 0) {
@@ -119,7 +130,7 @@ public class Accounts {
         return ApiException.missing("邀请已过期或使用过，请联系店主获取新链接。");
     }
 
-    private static String username(String input) {
+    static String username(String input) {
         String username = Inputs.required(input, 80, "账号").toLowerCase(Locale.ROOT);
         if (!username.matches("[a-z0-9._@+-]{3,80}")) {
             throw ApiException.invalid("账号使用 3–80 位英文字母、数字或 . _ @ + -。");
